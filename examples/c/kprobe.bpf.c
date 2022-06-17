@@ -7,6 +7,17 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
+typedef struct string_t {
+	u8 s[128];
+} string_t;
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 8192);
+	__type(key, s32);
+	__type(value, string_t);
+} hm SEC(".maps");
+
 SEC("kprobe/do_unlinkat")
 int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
 {
@@ -17,7 +28,11 @@ int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
 	pid = bpf_get_current_pid_tgid() >> 32;
 	char * np;
 	bpf_probe_read(&np, sizeof(np), &name->name);
-	bpf_probe_read_str(filename+1, 127, np+1);
+	s32 idx = 0;
+	string_t *s = bpf_map_lookup_elem(&hm, &idx);
+	if (s != NULL) {
+		bpf_probe_read_str(s, 128, np+1);
+	}
 	bpf_printk("KPROBE ENTRY pid = %d, filename = %s\n", pid, filename);
 	return 0;
 }
