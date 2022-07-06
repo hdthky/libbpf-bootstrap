@@ -20,6 +20,25 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 `minimal` is great as a bare-bones experimental playground to quickly try out
 new ideas or BPF features.
 
+## Minimal_Legacy
+
+This version of `minimal` is modified to allow running on even older kernels
+that do not allow global variables. bpf_printk uses global variables unless
+BPF_NO_GLOBAL_DATA is defined before including bpf_helpers.h. Additionally,
+the global variable my_pid has been replaced with an array of one element to
+hold the process pid.
+
+```
+$ cd examples/c
+$ make minimal_legacy
+$ sudo ./minimal_legacy
+$ sudo cat /sys/kernel/debug/tracing/trace_pipe
+  minimal_legacy-52030 [001] .... 491227.784078: 0x00000001: BPF triggered from PID 52030.
+  minimal_legacy-52030 [001] .... 491228.840571: 0x00000001: BPF triggered from PID 52030.
+  minimal_legacy-52030 [001] .... 491229.841643: 0x00000001: BPF triggered from PID 52030.
+  minimal_legacy-52030 [001] .... 491230.842432: 0x00000001: BPF triggered from PID 52030.
+```
+
 ## Bootstrap
 
 `bootstrap` is an example of a simple (but realistic) BPF application. It
@@ -94,6 +113,28 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
            <...>-461101 [018] d... 505433.345202: bpf_trace_printk: UPROBE EXIT: return = 3
            <...>-461101 [018] d... 505434.345342: bpf_trace_printk: UPROBE ENTRY: a = 2, b = 3
            <...>-461101 [018] d... 505434.345367: bpf_trace_printk: UPROBE EXIT: return = 5
+```
+
+## USDT
+
+`usdt` is an example of dealing with USDT probe. It attaches USDT BPF programs to
+the [libc:setjmp](https://www.gnu.org/software/libc/manual/html_node/Non_002dlocal-Goto-Probes.html) probe, which is triggered by calling `setjmp` in user-space program once per second and logs USDT arguments using `bpf_printk()` macro:
+
+```shell
+$ sudo ./usdt
+libbpf: loading object 'usdt_bpf' from buffer
+...
+Successfully started!
+...........
+```
+
+You can see `usdt` demo output in `/sys/kernel/debug/tracing/trace_pipe`:
+```shell
+$ sudo cat /sys/kernel/debug/tracing/trace_pipe
+            usdt-1919077 [005] d..21 537310.886092: bpf_trace_printk: USDT auto attach to libc:setjmp: arg1 = 55d03d6a42a0, arg2 = 0, arg3 = 55d03d65e54e
+            usdt-1919077 [005] d..21 537310.886105: bpf_trace_printk: USDT manual attach to libc:setjmp: arg1 = 55d03d6a42a0, arg2 = 0, arg3 = 55d03d65e54e
+            usdt-1919077 [005] d..21 537311.886214: bpf_trace_printk: USDT auto attach to libc:setjmp: arg1 = 55d03d6a42a0, arg2 = 0, arg3 = 55d03d65e54e
+            usdt-1919077 [005] d..21 537311.886227: bpf_trace_printk: USDT manual attach to libc:setjmp: arg1 = 55d03d6a42a0, arg2 = 0, arg3 = 55d03d65e54e
 ```
 
 # Fentry
@@ -179,6 +220,28 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
            <...>-2813507 [000] d.s1 602386.696702: bpf_trace_printk: packet size: 77
            <...>-2813507 [000] d.s1 602386.696735: bpf_trace_printk: packet size: 66
 ```
+
+# Profile
+
+`profile` is an example written in Rust and C with BlazeSym. It
+attaches to perf events, sampling on every processor periodically. It
+shows addresses, symbols, file names, and line numbers of stacktraces.
+
+```shell
+$ sudo ./target/release/profile
+COMM: swapper/6 (pid=0) @ CPU 6
+Kernel:
+  0 [<ffffffff81bdf010>] intel_idle+0x96
+  1 [<ffffffff819959b0>] cpuidle_enter_state+0x80 /ro/source/drivers/cpuidle/cpuidle.c:238
+  2 [<ffffffff81995cc9>] cpuidle_enter+0x29 /ro/source/drivers/cpuidle/cpuidle.c:353
+  3 [<ffffffff810f8c0b>] do_idle+0x1bb /ro/source/kernel/sched/idle.c:243
+  4 [<ffffffff810f8de9>] cpu_startup_entry+0x19 /ro/source/kernel/sched/idle.c:396
+  5 [<ffffffff81044f46>] start_secondary+0x116 /ro/source/arch/x86/kernel/smpboot.c:272
+  6 [<ffffffff810000f5>] secondary_startup_64_no_verify+0xb0 /ro/source/arch/x86/kernel/head_64.S:283
+No Userspace Stack
+```
+
+C version and Rust version show the same content.  Both of them use BlazeSym to symbolize stacktraces.
 
 # Building
 
